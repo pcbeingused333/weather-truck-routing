@@ -36,7 +36,7 @@ All of this lives in [`backend/routing/risk.py`](backend/routing/risk.py) as pur
   "Load" means the cargo weight the driver enters. For routing, the truck's gross weight is that load plus 35,000 lb for a typical empty tractor-trailer.
 - **Checkpoint risk** is the worst of the wind, rain and snow levels. The popup names whichever condition drove it.
 - **Wind** uses the sustained 10 m wind speed, which is what the thresholds describe. Gusts are shown for context but are not scored.
-- **Rain** is all liquid precipitation (Open-Meteo `rain` + `showers`). **Snow** is snowfall depth per hour.
+- **Rain** is all liquid precipitation (Open-Meteo `rain` + `showers`). **Snow** is snowfall depth per hour. Both are hourly totals for the hour ending at each timestamp, so a checkpoint uses the hour its ETA falls in; wind is interpolated between hours.
 
 ### Risk miles and recommendation
 
@@ -47,7 +47,7 @@ Routes are sorted by this key ([`planner.py`](backend/routing/planner.py)):
 1. **No Travel miles.** The brief doesn't list this, but No Travel is strictly worse than Severe, so a route that crosses it can't beat one that doesn't.
 2. Severe miles
 3. High miles
-4. Average risk, compared to one decimal. Two routes with near-identical averages (say 0.31 vs 0.33) are treated as tied, so the faster one wins instead of a meaningless difference deciding it.
+4. Average risk
 5. Travel time
 
 If even the best route has No Travel or Severe miles, the UI shows a warning that suggests delaying departure.

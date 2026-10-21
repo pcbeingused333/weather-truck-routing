@@ -8,6 +8,7 @@ from rest_framework.throttling import AnonRateThrottle
 from . import planner
 from .providers import geocoding
 from .providers.http import ProviderError
+from .providers.weather import OutsideForecastWindow
 from .serializers import HeatmapRequestSerializer, PlanRequestSerializer
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,11 @@ def plan(request):
             departure=d["departure"],
             load_lb=d["load_lb"],
             interval_mi=d["interval_mi"],
+        )
+    except OutsideForecastWindow:
+        return Response(
+            {"detail": "Part of this trip falls outside the available forecast. Choose an earlier departure."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
     except ProviderError as exc:
         return _upstream_error(exc)

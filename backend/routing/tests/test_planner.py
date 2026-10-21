@@ -84,3 +84,27 @@ def test_heatmap_hourly_arrays(monkeypatch):
     out = planner.heatmap([straight(0.0).coords], DEPART, 20_000)
     assert out["cells"]
     assert all(len(c["score"]) == planner.HEATMAP_HOURS + 1 for c in out["cells"])
+
+
+def test_lower_average_risk_beats_slightly_faster_route(plan):
+    # Both routes only Low/Moderate; B is a bit slower but less exposed.
+    a = straight(0.0, mph=60)
+    b = straight(1.0, mph=58)
+    a.coords = [(0.0 + i * 0.004, y) for i, (_, y) in enumerate(a.coords)]  # drifts into lon 0.1 wind
+    result = plan([a, b], {0.0: 30, 0.1: 30, 1.0: 0})
+    assert result["routes"][0]["avg_risk"] > result["routes"][1]["avg_risk"] > -1
+    assert result["recommended_index"] == 1
+    assert "average risk" in result["recommendation_reason"]
+
+
+def test_precipitation_uses_bucket_for_the_hour_containing_eta():
+    s = weather.HourlySeries(DEPART, [0.0, 0.0, 0.0], [0.0] * 3, [0.0, 0.6, 0.0], [0.0, 0.0, 2.5])
+    # 12:30 falls in the hour ending 13:00 (index 1): its rain total, not a blend.
+    assert s.at(DEPART + timedelta(minutes=30))["rain_in_hr"] == 0.6
+    assert s.at(DEPART + timedelta(minutes=90))["snow_in_hr"] == 2.5
+
+
+def test_eta_outside_forecast_raises_input_error():
+    s = weather.HourlySeries(DEPART, [0.0] * 3, [0.0] * 3, [0.0] * 3, [0.0] * 3)
+    with pytest.raises(weather.OutsideForecastWindow):
+        s.at(DEPART + timedelta(hours=5))

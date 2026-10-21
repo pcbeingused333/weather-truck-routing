@@ -45,3 +45,13 @@ def test_provider_failure_is_502(monkeypatch):
 
     monkeypatch.setattr(planner, "plan_routes", boom)
     assert APIClient().post("/api/plan", body(), format="json").status_code == 502
+
+
+def test_outside_forecast_is_400_not_502(monkeypatch):
+    from routing.providers.weather import OutsideForecastWindow
+
+    def boom(**kw):
+        raise OutsideForecastWindow("late")
+
+    monkeypatch.setattr(planner, "plan_routes", boom)
+    assert APIClient().post("/api/plan", body(), format="json").status_code == 400

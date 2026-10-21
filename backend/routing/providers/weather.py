@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,10 @@ from .http import ProviderError, get_json
 HOURLY_VARS = ("wind_speed_10m", "wind_gusts_10m", "rain", "showers", "snowfall")
 LOCATIONS_PER_REQUEST = 50
 CACHE_SECONDS = 15 * 60
+
+
+class OutsideForecastWindow(Exception):
+    """A requested time is outside the forecast data we have (a user input problem)."""
 
 
 @dataclass
@@ -31,18 +36,21 @@ class HourlySeries:
         """Values at `when`, linearly interpolated between the surrounding hours."""
         h = (when - self.start).total_seconds() / 3600
         if h < 0 or h > len(self.wind_mph) - 1:
-            raise ProviderError(f"{when.isoformat()} is outside the forecast window")
+            raise OutsideForecastWindow(f"{when.isoformat()} is outside the forecast window")
         i = min(int(h), len(self.wind_mph) - 2)
         t = h - i
 
         def lerp(series: list[float]) -> float:
             return series[i] + t * (series[i + 1] - series[i])
 
+        # Wind is an instantaneous value, so interpolate. Rain and snow are totals
+        # for the hour *ending* at each timestamp, so take the bucket covering `when`.
+        bucket = min(math.ceil(h), len(self.rain_in) - 1)
         return {
             "wind_mph": lerp(self.wind_mph),
             "gust_mph": lerp(self.gust_mph),
-            "rain_in_hr": lerp(self.rain_in),
-            "snow_in_hr": lerp(self.snow_in),
+            "rain_in_hr": self.rain_in[bucket],
+            "snow_in_hr": self.snow_in[bucket],
         }
 
 
@@ -77,8 +85,11 @@ def _fetch_chunk(points: list[tuple[float, float]], start: datetime, end: dateti
     if len(items) != len(points):
         raise ProviderError("Open-Meteo returned an unexpected number of locations")
     out = []
+    expected_first = start.strftime("%Y-%m-%dT%H:%M")
     for item in items:
         h = item["hourly"]
+        if not h["time"] or h["time"][0] != expected_first:
+            raise ProviderError("Open-Meteo returned a different time window than requested")
         zero = lambda xs: [x or 0.0 for x in xs]  # noqa: E731 - nulls mean "no data", treat as calm
         out.append(
             HourlySeries(

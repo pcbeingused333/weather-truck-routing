@@ -93,7 +93,7 @@ export default function MapView({ plan, selected, onSelect, heat, hour, showHeat
       map.getCanvas().style.cursor = "pointer";
       const f = e.features![0];
       const cp: Checkpoint = JSON.parse(f.properties.cp);
-      popup.setLngLat([cp.lon, cp.lat]).setHTML(checkpointHtml(cp, f.properties.route)).addTo(map);
+      popup.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number]).setHTML(checkpointHtml(cp, f.properties.route)).addTo(map);
     });
     map.on("mouseleave", "checkpoints", () => {
       map.getCanvas().style.cursor = "";

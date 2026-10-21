@@ -48,7 +48,13 @@ export default function App() {
       setHeatStart(grid.start);
       setHeatHours(grid.hours);
     } catch (e) {
-      if (!ctrl.signal.aborted) setError((e as Error).message);
+      if (!ctrl.signal.aborted) {
+        // Don't leave a previous plan on screen without its heatmap.
+        setPlan(null);
+        setHeat(null);
+        setHeatStart(null);
+        setError((e as Error).message);
+      }
     } finally {
       if (inflight.current === ctrl) {
         setBusy(false);
@@ -63,7 +69,7 @@ export default function App() {
   const truckAt = useMemo<LonLat | null>(() => {
     if (!route || !heatStart || !plan) return null;
     const elapsed = (new Date(heatStart).getTime() + hour * 3600_000 - new Date(plan.departure).getTime()) / 1000;
-    const mile = mileAtElapsed(route.checkpoints, Math.max(0, elapsed));
+    const mile = mileAtElapsed(route.checkpoints, elapsed); // null before departure / after arrival
     if (mile === null) return null;
     const cum = cumulative(route.geometry);
     return pointAt(route.geometry, cum, (mile * cum[cum.length - 1]) / route.distance_mi);

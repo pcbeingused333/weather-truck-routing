@@ -28,13 +28,13 @@ class RouteOption:
     @property
     def sort_key(self) -> tuple:
         """The brief's preference order. No Travel miles come first because they
-        are strictly worse than Severe; average risk is compared at one decimal so
-        near-identical averages fall through to travel time."""
+        are strictly worse than Severe. Values are rounded only to absorb float
+        noise, at the same precision the API reports them."""
         return (
             round(self.miles_by_level[Risk.NO_TRAVEL], 1),
             round(self.miles_by_level[Risk.SEVERE], 1),
             round(self.miles_by_level[Risk.HIGH], 1),
-            round(self.avg_risk, 1),
+            round(self.avg_risk, 2),
             self.route.duration_s,
         )
 
@@ -166,7 +166,7 @@ def corridor_grid(routes: list[list[LonLat]], max_points: int = 180) -> list[Lon
         ]
         if len(pts) <= max_points:
             return pts
-    return pts
+    raise ValueError("Trip corridor is too large for the heatmap grid")
 
 
 def hours_of(s: weather.HourlySeries):
