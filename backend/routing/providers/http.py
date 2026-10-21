@@ -11,15 +11,21 @@ class ProviderError(Exception):
     """An upstream API failed or returned something unusable."""
 
 
+class RateLimited(ProviderError):
+    """The upstream API refused the request with a 429, so retrying right away won't help."""
+
+
 def get_json(url: str, *, params=None, timeout: float = 20, retries: int = 0):
     for attempt in range(retries + 1):
         try:
             resp = _session.get(url, params=params, timeout=timeout)
+            if resp.status_code == 429:
+                raise RateLimited(f"GET {url} returned 429: {resp.text[:200]}")
             if not resp.ok:
                 raise ProviderError(f"GET {url} returned {resp.status_code}: {resp.text[:200]}")
             return resp.json()
         except (requests.RequestException, ValueError, ProviderError) as exc:
-            if attempt == retries:
+            if isinstance(exc, RateLimited) or attempt == retries:
                 raise exc if isinstance(exc, ProviderError) else ProviderError(f"GET {url} failed: {exc}") from exc
             time.sleep(1.5 * (attempt + 1))
 

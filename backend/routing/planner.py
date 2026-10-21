@@ -104,7 +104,8 @@ def _explain(best: RouteOption, runner_up: RouteOption | None) -> str:
     return "Tied with the next option on every criterion."
 
 
-def plan_routes(origin: LonLat, dest: LonLat, departure: datetime, load_lb: float, interval_mi: float) -> dict:
+def plan_routes(origin: LonLat, dest: LonLat, departure: datetime, load_lb: float, interval_mi: float,
+                weather_data: dict | None = None) -> dict:
     routes = directions.get_alternatives(origin, dest, load_lb)
 
     # One forecast window covering the longest trip, fetched once for every
@@ -112,7 +113,7 @@ def plan_routes(origin: LonLat, dest: LonLat, departure: datetime, load_lb: floa
     # Same 48 h window the heatmap uses, so both share cache entries.
     hours = max(HEATMAP_HOURS, math.ceil(max(r.duration_s for r in routes) / 3600) + 1)
     all_samples = [s.lonlat for r in routes for s in sample_route(r.coords, r.time_profile, interval_mi)]
-    forecasts = weather.hourly_forecasts(all_samples, departure, hours)
+    forecasts = weather.hourly_forecasts(all_samples, departure, hours, weather_data)
 
     options = [_score_route(i, r, departure, load_lb, interval_mi, forecasts) for i, r in enumerate(routes)]
     ranked = sorted(options, key=lambda o: o.sort_key)
@@ -173,9 +174,9 @@ def hours_of(s: weather.HourlySeries):
     return list(zip(s.wind_mph, s.rain_in, s.snow_in))[: HEATMAP_HOURS + 1]
 
 
-def heatmap(geometries: list[list[LonLat]], start: datetime, load_lb: float) -> dict:
+def heatmap(geometries: list[list[LonLat]], start: datetime, load_lb: float, weather_data: dict | None = None) -> dict:
     points = corridor_grid(geometries)
-    forecasts = weather.hourly_forecasts(points, start, HEATMAP_HOURS)
+    forecasts = weather.hourly_forecasts(points, start, HEATMAP_HOURS, weather_data)
     start = weather.floor_hour(start)
     cells = []
     for p in points:

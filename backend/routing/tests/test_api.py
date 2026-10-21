@@ -55,3 +55,38 @@ def test_outside_forecast_is_400_not_502(monkeypatch):
 
     monkeypatch.setattr(planner, "plan_routes", boom)
     assert APIClient().post("/api/plan", body(), format="json").status_code == 400
+
+
+def test_rate_limited_weather_asks_the_browser_and_accepts_its_data(monkeypatch):
+    from datetime import datetime, timezone
+
+    from routing.providers.weather import NeedBrowserWeather
+
+    start = datetime(2026, 10, 22, 12, tzinfo=timezone.utc)
+    seen = {}
+
+    def plan_routes(**kw):
+        seen.update(kw)
+        if kw["weather_data"] is None:
+            raise NeedBrowserWeather([(-111.9, 40.8)], start, start)
+        return {"routes": []}
+
+    monkeypatch.setattr(planner, "plan_routes", plan_routes)
+    r = APIClient().post("/api/plan", body(), format="json")
+    assert r.status_code == 503
+    req = r.json()["weather_request"]
+    assert r.json()["code"] == "weather_from_browser"
+    assert req["points"] == [{"key": "-111.9,40.8", "lon": -111.9, "lat": 40.8}]
+    assert req["params"]["start_hour"] == "2026-10-22T12:00" and "rain" in req["params"]["hourly"]
+
+    supplied = {"-111.9,40.8": {"hourly": {"time": ["2026-10-22T12:00"], "rain": [0]}}}
+    r = APIClient().post("/api/plan", body(weather=supplied), format="json")
+    assert r.status_code == 200
+    assert seen["weather_data"] == supplied
+
+
+def test_browser_weather_is_capped(monkeypatch):
+    monkeypatch.setattr(planner, "plan_routes", lambda **kw: {"routes": []})
+    too_many = {f"{i},{i}": {} for i in range(601)}
+    r = APIClient().post("/api/plan", body(weather=too_many), format="json")
+    assert r.status_code == 400 and "weather" in r.json()

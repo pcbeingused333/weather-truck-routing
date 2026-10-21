@@ -16,7 +16,7 @@ def straight(lon: float, miles: float = 100, mph: float = 50) -> directions.Rout
 
 
 def fake_forecasts(wind_by_lon: dict[float, float]):
-    def _fetch(points, start, hours):
+    def _fetch(points, start, hours, supplied=None):
         out = {}
         for p in points:
             k = weather._key(p)

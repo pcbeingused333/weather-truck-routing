@@ -8,7 +8,7 @@ from rest_framework.throttling import AnonRateThrottle
 from . import planner
 from .providers import geocoding
 from .providers.http import ProviderError
-from .providers.weather import OutsideForecastWindow
+from .providers.weather import NeedBrowserWeather, OutsideForecastWindow
 from .serializers import HeatmapRequestSerializer, PlanRequestSerializer
 
 log = logging.getLogger(__name__)
@@ -19,6 +19,19 @@ def _upstream_error(exc: ProviderError) -> Response:
     return Response(
         {"detail": "A routing or weather provider is unavailable right now. Please try again."},
         status=status.HTTP_502_BAD_GATEWAY,
+    )
+
+
+def _need_browser_weather(exc: NeedBrowserWeather) -> Response:
+    """Ask the browser to fetch the forecasts itself and resend the request with them."""
+    log.info("Open-Meteo rate-limited this server; asking the browser for %d locations", len(exc.points))
+    return Response(
+        {
+            "detail": "The weather service is rate-limiting this server. Please try again.",
+            "code": "weather_from_browser",
+            "weather_request": exc.as_request(),
+        },
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
     )
 
 
@@ -46,7 +59,10 @@ def plan(request):
             departure=d["departure"],
             load_lb=d["load_lb"],
             interval_mi=d["interval_mi"],
+            weather_data=d.get("weather"),
         )
+    except NeedBrowserWeather as exc:
+        return _need_browser_weather(exc)
     except OutsideForecastWindow:
         return Response(
             {"detail": "Part of this trip falls outside the available forecast. Choose an earlier departure."},
@@ -65,7 +81,9 @@ def heatmap(request):
     d = s.validated_data
     try:
         geometries = [[(p[0], p[1]) for p in r] for r in d["routes"]]
-        return Response(planner.heatmap(geometries, d["start"], d["load_lb"]))
+        return Response(planner.heatmap(geometries, d["start"], d["load_lb"], d.get("weather")))
+    except NeedBrowserWeather as exc:
+        return _need_browser_weather(exc)
     except ProviderError as exc:
         return _upstream_error(exc)
 

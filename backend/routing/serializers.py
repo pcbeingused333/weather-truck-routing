@@ -4,6 +4,19 @@ from django.utils import timezone
 from rest_framework import serializers
 
 MAX_DAYS_AHEAD = 7
+MAX_WEATHER_LOCATIONS = 600
+
+
+class BrowserWeatherField(serializers.DictField):
+    """Forecasts the browser fetched from Open-Meteo after a weather_from_browser response."""
+
+    def __init__(self, **kwargs):
+        super().__init__(child=serializers.DictField(), required=False, **kwargs)
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict) and len(data) > MAX_WEATHER_LOCATIONS:
+            raise serializers.ValidationError(f"At most {MAX_WEATHER_LOCATIONS} forecast locations.")
+        return super().to_internal_value(data)
 
 
 class PointSerializer(serializers.Serializer):
@@ -17,6 +30,7 @@ class PlanRequestSerializer(serializers.Serializer):
     departure = serializers.DateTimeField()
     load_lb = serializers.FloatField(min_value=0, max_value=120_000)
     interval_mi = serializers.ChoiceField(choices=[10, 25, 50], default=25)
+    weather = BrowserWeatherField()
 
     def validate_departure(self, value):
         now = timezone.now()
@@ -41,3 +55,4 @@ class HeatmapRequestSerializer(serializers.Serializer):
     )
     start = serializers.DateTimeField()
     load_lb = serializers.FloatField(min_value=0, max_value=120_000)
+    weather = BrowserWeatherField()

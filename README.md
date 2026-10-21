@@ -88,6 +88,7 @@ backend/ (Django 5 + DRF)
 ## Performance
 
 - **One forecast request per plan.** The checkpoints of all three routes are fetched together and snapped to a 0.1° (~7 mi) grid, which is about the forecast model's own resolution. Shared corridor points are fetched once and then cached for 15 minutes.
+- **Weather fallback through the browser.** Free hosts share outbound IPs, and Open-Meteo's free tier limits requests per IP, so the server can get a `429`. When that happens, `/api/plan` and `/api/heatmap` answer `503` with `code: "weather_from_browser"` and the exact locations and time window they need. The browser fetches those from Open-Meteo with the user's own IP and resends the request with the data (`weather`). That data is only used for that request and is never cached, because other users can't trust it.
 - **The heatmap slider never makes a request.** The backend returns a coarse grid on a fixed global lattice, so repeat trips hit the cache. The browser turns it into 49 small PNG frames, interpolating bilinearly between grid points and spacing rows in Web Mercator to match the map projection. Moving the slider swaps one image source on the GPU.
 - Routes are drawn from geometry thinned to about 0.5 mi. The heatmap loads in a second request, so the routes appear first.
 - The route itself is cached for an hour, so changing only the interval or departure doesn't call the router again.
