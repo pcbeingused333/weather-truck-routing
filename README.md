@@ -78,7 +78,7 @@ flowchart LR
     Planner <--> Cache
   end
 
-  subgraph External["Free public services (no API keys)"]
+  subgraph External["Free public services · no API keys · rate-limited"]
     Valhalla["Valhalla truck costing<br/>(OSRM fallback)"]
     Meteo["Open-Meteo<br/>hourly forecast"]
     Nominatim["Nominatim<br/>geocoding"]
@@ -145,14 +145,16 @@ backend/ (Django 5 + DRF)
 | `POST /api/plan` | `{origin, destination, departure, load_lb, interval_mi}` → 3 scored routes + recommendation |
 | `POST /api/heatmap` | `{routes, start, load_lb}` → corridor grid with 49 hourly values per cell |
 
-### Third-party services (all free, no API keys)
+### Third-party services (free to use, no API keys, but rate-limited)
 
-| Need | Service | Notes |
-|---|---|---|
-| Routing | [Valhalla](https://valhalla.github.io/valhalla/) public server, `truck` costing | Returns up to 2 alternates. [OSRM](https://project-osrm.org/) is the fallback. |
-| Weather | [Open-Meteo](https://open-meteo.com/) hourly forecast | Many locations per request, mph and in/hr units. |
-| Geocoding | [Nominatim](https://nominatim.org/) | US, Canada and Mexico only. |
-| Basemap | [OpenFreeMap](https://openfreemap.org/) vector tiles | |
+"Free" here means no cost and no sign-up, not unlimited: every service below is a public, shared server with a fair-use policy. The app is built around those limits (one batched forecast request per plan, caching, and the [browser weather fallback](#performance) when Open-Meteo answers `429`), and [Limitations](#limitations-and-next-steps) explains what a production version would change.
+
+| Need | Service | Notes | Usage limits |
+|---|---|---|---|
+| Routing | [Valhalla](https://valhalla.github.io/valhalla/) public server, `truck` costing | Returns up to 2 alternates. [OSRM](https://project-osrm.org/) is the fallback. | Shared demo servers, fair use only, not meant for production traffic. |
+| Weather | [Open-Meteo](https://open-meteo.com/) hourly forecast | Many locations per request, mph and in/hr units. | Free tier for non-commercial use, limited per IP (about 10,000 calls a day). On a shared host IP the daily limit can run out, which is why the browser fallback exists. |
+| Geocoding | [Nominatim](https://nominatim.org/) | US, Canada and Mexico only. | At most 1 request per second; results are cached for 24 h. |
+| Basemap | [OpenFreeMap](https://openfreemap.org/) vector tiles | | Free, no published per-user limit. |
 
 **Getting three routes.** Public routers often return fewer than three distinct alternatives. When that happens, the backend asks for detours through a waypoint offset to either side of the origin–destination midpoint. It keeps a detour only if less than 85% of it overlaps a route it already has, and only if it is no more than 60% longer than the main route. Detours are requested as two Valhalla legs, because the public server rejects multi-point requests over 1,500 km. That also keeps every option on the same truck speed model, so travel times stay comparable.
 
@@ -192,7 +194,7 @@ docker build -t truck-routing . && docker run -p 8000:8000 -e DJANGO_ALLOWED_HOS
 
 ## Limitations and next steps
 
-- **Public free APIs.** Valhalla and OSRM demo servers and Open-Meteo's free tier have rate limits. A production version would use a self-hosted router or a paid key, plus Redis instead of the per-process memory cache.
+- **Rate limits of the free APIs** (see [Third-party services](#third-party-services-free-to-use-no-api-keys-but-rate-limited)). Under heavy use the demo can answer "A routing or weather provider is unavailable right now"; the browser fallback covers Open-Meteo's limit, but not the routers'. A production version would use a self-hosted Valhalla or a paid routing and weather key, plus Redis instead of the per-process memory cache.
 - **Departure window.** Departures are limited to the next 7 days. Forecasts get unreliable after that, and the heatmap covers 48 h from departure.
 - **No hours-of-service breaks.** ETAs assume continuous driving. Adding the mandatory 30-min break and 10-h reset would shift later checkpoints' ETAs, and with them the weather each one sees.
 - **Point samples.** Weather is sampled at checkpoints, so a narrow storm cell between two 50-mile checkpoints can be missed. The 10-mile interval reduces this.
