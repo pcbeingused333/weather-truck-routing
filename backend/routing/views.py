@@ -66,4 +66,29 @@ def heatmap(request):
 
 @api_view(["GET"])
 def health(request):
-    return Response({"ok": True})
+    """`?deep=1` also probes each upstream provider (used to diagnose 502s)."""
+    if request.query_params.get("deep") != "1":
+        return Response({"ok": True})
+    return Response({"ok": True, "providers": providers_status()})
+
+
+def providers_status() -> dict:
+    from datetime import datetime, timezone
+
+    from .providers import directions, weather
+
+    a, b = (-87.63, 41.88), (-88.0, 41.8)
+    checks = {
+        "valhalla": lambda: directions.valhalla_routes(a, b, 20_000, 0),
+        "osrm": lambda: directions.osrm_routes([a, b], 0),
+        "open_meteo": lambda: weather._fetch_chunk([a], weather.floor_hour(datetime.now(timezone.utc)), weather.floor_hour(datetime.now(timezone.utc))),
+        "nominatim": lambda: geocoding.search("Chicago", 1),
+    }
+    out = {}
+    for name, check in checks.items():
+        try:
+            check()
+            out[name] = "ok"
+        except ProviderError as exc:
+            out[name] = str(exc)[:300]
+    return out
