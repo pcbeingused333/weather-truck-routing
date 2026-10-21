@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/api.ts","./src/format.ts","./src/geo.ts","./src/heatmap.ts","./src/main.tsx","./src/risk.ts","./src/types.ts","./src/components/CheckpointTable.tsx","./src/components/MapView.tsx","./src/components/PlaceInput.tsx","./src/components/RouteCards.tsx","./src/components/TimeSlider.tsx","./src/components/TripForm.tsx"],"version":"5.6.3"}
