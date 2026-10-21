@@ -15,11 +15,12 @@ def get_json(url: str, *, params=None, timeout: float = 20, retries: int = 0):
     for attempt in range(retries + 1):
         try:
             resp = _session.get(url, params=params, timeout=timeout)
-            resp.raise_for_status()
+            if not resp.ok:
+                raise ProviderError(f"GET {url} returned {resp.status_code}: {resp.text[:200]}")
             return resp.json()
-        except (requests.RequestException, ValueError) as exc:
+        except (requests.RequestException, ValueError, ProviderError) as exc:
             if attempt == retries:
-                raise ProviderError(f"GET {url} failed: {exc}") from exc
+                raise exc if isinstance(exc, ProviderError) else ProviderError(f"GET {url} failed: {exc}") from exc
             time.sleep(1.5 * (attempt + 1))
 
 
