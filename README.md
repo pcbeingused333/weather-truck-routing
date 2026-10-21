@@ -54,6 +54,77 @@ If even the best route has No Travel or Severe miles, the UI shows a warning tha
 
 ## Architecture
 
+```mermaid
+flowchart LR
+  subgraph Browser["Browser · React 18 + TypeScript + MapLibre GL"]
+    Form["TripForm<br/>origin, destination, departure,<br/>load, interval"]
+    Api["api.ts<br/>planTrip · fetchHeatmap"]
+    Map["MapView<br/>routes, risk segments,<br/>checkpoints, heatmap frames"]
+    Cards["RouteCards + CheckpointTable"]
+    Form --> Api
+    Api --> Map
+    Api --> Cards
+  end
+
+  subgraph Backend["Django 5 + DRF (one container, serves the React build)"]
+    Views["views.py<br/>/api/geocode · /api/plan · /api/heatmap"]
+    Planner["planner.py<br/>score + rank routes, heatmap grid"]
+    Geo["geo.py<br/>sampling every N mi, ETAs"]
+    Risk["risk.py<br/>wind / rain / snow + load rules"]
+    Cache[("per-process cache<br/>routes 1 h · forecasts 15 min ·<br/>place search 24 h")]
+    Views --> Planner
+    Planner --> Geo
+    Planner --> Risk
+    Planner <--> Cache
+  end
+
+  subgraph External["Free public services (no API keys)"]
+    Valhalla["Valhalla truck costing<br/>(OSRM fallback)"]
+    Meteo["Open-Meteo<br/>hourly forecast"]
+    Nominatim["Nominatim<br/>geocoding"]
+    Tiles["OpenFreeMap<br/>vector tiles"]
+  end
+
+  Api -- "JSON over HTTPS" --> Views
+  Planner -- "3 truck routes" --> Valhalla
+  Planner -- "forecast per checkpoint" --> Meteo
+  Views -- "place search" --> Nominatim
+  Map -- "basemap" --> Tiles
+  Api -. "only when the server gets a 429" .-> Meteo
+```
+
+What happens on **Plan route**, including the weather fallback:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant S as Django /api/plan
+  participant R as Valhalla / OSRM
+  participant W as Open-Meteo
+
+  B->>S: origin, destination, departure, load, interval
+  S->>R: truck routes (gross weight)
+  R-->>S: up to 3 routes + per-maneuver timings
+  Note over S: sample every N mi, ETA for each checkpoint
+  S->>W: hourly forecast for every checkpoint (one request)
+  alt forecast received
+    W-->>S: wind, rain, snow per hour
+    Note over S: risk per checkpoint, miles per level, rank routes
+    S-->>B: 200 · scored routes + recommendation
+  else server is rate-limited (429)
+    S-->>B: 503 weather_from_browser + exact points and time window
+    B->>W: same forecast, from the user's own IP
+    W-->>B: hourly forecast
+    B->>S: same request + weather data
+    S-->>B: 200 · scored routes (that data is never cached)
+  end
+  B->>S: /api/heatmap (after the routes are drawn)
+  S-->>B: corridor grid, 49 hourly values per cell
+```
+
+**Code layout**
+
 ```
 frontend/ (React 18 + TypeScript + Vite + MapLibre GL)
   src/App.tsx               state, request orchestration, truck position
