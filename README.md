@@ -2,7 +2,7 @@
 
 A React + Django app that helps a truck driver choose the safest route. It looks at the weather forecast for the hour the truck will actually reach each point, the load weight, and the travel time.
 
-**Live demo:** _<hosted URL>_ · **Walkthrough:** _<Loom URL>_
+**Live demo:** https://weather-truck-routing-p4iz.onrender.com (free tier: the first request after idle can take ~50 s to wake up) · **Walkthrough:** _<Loom URL>_
 
 ![screenshot](docs/screenshot.png)
 
